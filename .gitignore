@@ -1,0 +1,17 @@
+# dependencies
+node_modules
+.pnpm-store
+
+# builds
+.next
+dist
+coverage
+*.tsbuildinfo
+
+# tests
+playwright-report
+test-results
+
+# misc
+.DS_Store
+*.log

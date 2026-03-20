@@ -1,0 +1,57 @@
+name: Agent task
+description: A well-scoped task suitable for Codex or other agents
+title: "[agent] "
+labels: ["agent:ready"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What outcome do you want?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Bullet the measurable conditions for done.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - area:web
+        - area:shared
+        - area:e2e
+        - area:docs
+        - area:infra
+    validations:
+      required: true
+
+  - type: textarea
+    id: allowed_paths
+    attributes:
+      label: Allowed paths to modify
+      description: Example: apps/web/**, packages/shared/**, tests/e2e/**
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_bounds
+    attributes:
+      label: Out of bounds
+      description: Explicitly list things agents must not touch.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification required
+      description: Usually pnpm verify.
+    validations:
+      required: true

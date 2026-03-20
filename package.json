@@ -1,0 +1,21 @@
+{
+  "name": "agentweaverlab-test-repo",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "dev": "pnpm -C apps/web dev",
+    "lint": "pnpm -C apps/web lint",
+    "typecheck": "pnpm -C packages/shared typecheck && pnpm -C apps/web typecheck",
+    "test": "pnpm -C packages/shared test",
+    "build": "pnpm -C apps/web build",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.ts",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e:smoke"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.0"
+  }
+}
