@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   buildHeroMessage,
+  mergeItemsPreservingOptimistic,
   type Item,
   type ItemPayload,
   normalizeItemTitle
@@ -41,7 +42,9 @@ export function AppShell() {
       })
       .then((payload) => {
         if (isMounted) {
-          setItems(payload.items);
+          setItems((currentItems) =>
+            mergeItemsPreservingOptimistic(currentItems, payload.items)
+          );
         }
       })
       .catch((fetchError: Error) => {

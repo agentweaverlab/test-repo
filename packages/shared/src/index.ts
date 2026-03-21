@@ -29,6 +29,16 @@ export function createItemFromTitle(title: string): Item {
   };
 }
 
+export function mergeItemsPreservingOptimistic(
+  currentItems: Item[],
+  fetchedItems: Item[]
+) {
+  const fetchedIds = new Set(fetchedItems.map((item) => item.id));
+  const optimisticItems = currentItems.filter((item) => !fetchedIds.has(item.id));
+
+  return [...optimisticItems, ...fetchedItems];
+}
+
 export function buildHeroMessage(repoName: string) {
   return `Make ${repoName} easy for agents to change.`;
 }

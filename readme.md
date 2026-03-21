@@ -73,4 +73,4 @@ You need to handle account-bound or UI-bound steps:
 
 ## Next Setup Steps
 
-Follow [docs/codex-github-setup.md](/Users/ryancameron/projects/test-repo/docs/codex-github-setup.md) for the GitHub and Codex web steps after local proof-of-life is green.
+Follow [docs/codex-github-setup.md](docs/codex-github-setup.md) for the GitHub and Codex web steps after local proof-of-life is green.
