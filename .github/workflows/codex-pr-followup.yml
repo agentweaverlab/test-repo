@@ -1,0 +1,320 @@
+name: codex-pr-followup
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: codex-pr-followup-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  codex-followup:
+    if: >-
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.type != 'Bot' &&
+      startsWith(github.event.comment.body, '/codex ') &&
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Load pull request metadata
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pullNumber = context.payload.issue.number;
+            const triggerComment = context.payload.comment.body.trim();
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pullNumber
+            });
+
+            if (pr.head.repo.full_name !== `${owner}/${repo}`) {
+              core.setFailed(
+                "This workflow only supports pull requests from branches in the same repository."
+              );
+              return;
+            }
+
+            core.setOutput("number", String(pr.number));
+            core.setOutput("head_ref", pr.head.ref);
+            core.setOutput("head_repo", pr.head.repo.full_name);
+            core.setOutput("comment_author", context.payload.comment.user.login);
+            core.setOutput("trigger_comment", triggerComment);
+
+      - name: Checkout pull request branch
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ steps.pr.outputs.head_repo }}
+          ref: ${{ steps.pr.outputs.head_ref }}
+          fetch-depth: 0
+
+      - name: Build PR context file
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          TRIGGER_COMMENT: ${{ steps.pr.outputs.trigger_comment }}
+          COMMENT_AUTHOR: ${{ steps.pr.outputs.comment_author }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("node:fs");
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pullNumber = Number(process.env.PR_NUMBER);
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pullNumber
+            });
+
+            const issueComments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner,
+                repo,
+                issue_number: pullNumber,
+                per_page: 100
+              }
+            );
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number: pullNumber,
+              per_page: 100
+            });
+
+            const reviewComments = await github.paginate(
+              github.rest.pulls.listReviewComments,
+              {
+                owner,
+                repo,
+                pull_number: pullNumber,
+                per_page: 100
+              }
+            );
+
+            const clean = (text) => {
+              const value = (text || "").trim();
+              if (!value) {
+                return "(empty)";
+              }
+
+              if (value.length <= 2000) {
+                return value;
+              }
+
+              return `${value.slice(0, 2000)}\n...[truncated]`;
+            };
+
+            const lines = [];
+            lines.push(`# Pull request #${pr.number}: ${pr.title}`);
+            lines.push(`Base branch: ${pr.base.ref}`);
+            lines.push(`Head branch: ${pr.head.ref}`);
+            lines.push(`Head SHA: ${pr.head.sha}`);
+            lines.push("");
+            lines.push("## Pull request body");
+            lines.push(clean(pr.body));
+            lines.push("");
+            lines.push("## Trigger comment");
+            lines.push(`Author: ${process.env.COMMENT_AUTHOR}`);
+            lines.push(clean(process.env.TRIGGER_COMMENT));
+            lines.push("");
+            lines.push("## Recent issue comments");
+
+            for (const comment of issueComments.slice(-15)) {
+              lines.push(`### ${comment.user.login}`);
+              lines.push(clean(comment.body));
+              lines.push("");
+            }
+
+            lines.push("## Recent reviews");
+
+            for (const review of reviews.slice(-10)) {
+              lines.push(`### ${review.user.login} [${review.state}]`);
+              lines.push(clean(review.body));
+              lines.push("");
+            }
+
+            lines.push("## Recent review comments");
+
+            for (const comment of reviewComments.slice(-20)) {
+              const lineNumber = comment.line ?? comment.original_line ?? "?";
+              lines.push(`### ${comment.user.login} on ${comment.path}:${lineNumber}`);
+              lines.push(clean(comment.body));
+              lines.push("");
+            }
+
+            fs.mkdirSync(".github/codex/.generated", { recursive: true });
+            fs.writeFileSync(
+              ".github/codex/.generated/pr-context.md",
+              lines.join("\n")
+            );
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Validate required secrets
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_PUSH_TOKEN: ${{ secrets.CODEX_PUSH_TOKEN }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::Missing OPENAI_API_KEY secret."
+            exit 1
+          fi
+
+          if [ -z "$CODEX_PUSH_TOKEN" ]; then
+            echo "::error::Missing CODEX_PUSH_TOKEN secret."
+            exit 1
+          fi
+
+      - name: Run Codex follow-up
+        id: run_codex
+        continue-on-error: true
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/pr-followup.md
+          output-file: .github/codex/.generated/codex-output.md
+          safety-strategy: drop-sudo
+          sandbox: workspace-write
+
+      - name: Detect branch changes
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify updated branch
+        id: verify_changes
+        if: steps.changes.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          CI: "1"
+          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:3000"
+        run: pnpm verify
+
+      - name: Commit and push follow-up changes
+        id: push_changes
+        if: >-
+          steps.changes.outputs.changed == 'true' &&
+          steps.verify_changes.outcome == 'success'
+        env:
+          CODEX_PUSH_TOKEN: ${{ secrets.CODEX_PUSH_TOKEN }}
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply Codex follow-up for PR #${PR_NUMBER}"
+          git remote set-url origin "https://x-access-token:${CODEX_PUSH_TOKEN}@github.com/${REPO}.git"
+          git push origin "HEAD:${HEAD_REF}"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Codex artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-pr-followup-${{ steps.pr.outputs.number }}
+          if-no-files-found: ignore
+          path: |
+            .github/codex/.generated/codex-output.md
+            playwright-report
+            test-results
+
+      - name: Comment back on the pull request
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGER_COMMENT: ${{ steps.pr.outputs.trigger_comment }}
+          CODEX_OUTCOME: ${{ steps.run_codex.outcome }}
+          CHANGED: ${{ steps.changes.outputs.changed }}
+          VERIFY_OUTCOME: ${{ steps.verify_changes.outcome }}
+          PUSHED: ${{ steps.push_changes.outputs.pushed }}
+          FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const body = process.env.FINAL_MESSAGE?.trim();
+            const changed = process.env.CHANGED === "true";
+            const pushed = process.env.PUSHED === "true";
+            const verifyOutcome = process.env.VERIFY_OUTCOME || "skipped";
+            const codexOutcome = process.env.CODEX_OUTCOME || "skipped";
+
+            let statusLine = "- No repository changes were produced.";
+            if (changed && verifyOutcome === "success" && pushed) {
+              statusLine =
+                "- Updated the PR branch, reran `pnpm verify`, and pushed a new commit.";
+            } else if (changed && verifyOutcome !== "success") {
+              statusLine =
+                "- Produced changes locally, but `pnpm verify` failed so nothing was pushed.";
+            } else if (changed && !pushed) {
+              statusLine =
+                "- Produced changes locally, but the branch update was not pushed.";
+            }
+
+            const lines = [
+              "Codex PR follow-up finished.",
+              "",
+              `- Trigger: \`${process.env.TRIGGER_COMMENT}\``,
+              `- Codex step: \`${codexOutcome}\``,
+              `- Verify step: \`${verifyOutcome}\``,
+              statusLine,
+              `- Run log: ${process.env.RUN_URL}`
+            ];
+
+            if (body) {
+              lines.push("", "Summary:", "", body);
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body: lines.join("\n")
+            });
+
+      - name: Fail the job when Codex or verify failed
+        if: >-
+          steps.run_codex.outcome != 'success' ||
+          (steps.changes.outputs.changed == 'true' && steps.verify_changes.outcome != 'success')
+        run: exit 1

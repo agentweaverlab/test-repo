@@ -74,3 +74,5 @@ You need to handle account-bound or UI-bound steps:
 ## Next Setup Steps
 
 Follow [docs/codex-github-setup.md](docs/codex-github-setup.md) for the GitHub and Codex web steps after local proof-of-life is green.
+
+For iterative PR updates triggered from GitHub comments, see [docs/codex-pr-automation.md](docs/codex-pr-automation.md).
