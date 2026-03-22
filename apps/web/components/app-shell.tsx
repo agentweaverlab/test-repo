@@ -7,7 +7,7 @@ import {
   mergeItemsPreservingOptimistic,
   type Item,
   type ItemPayload,
-  normalizeItemTitle
+  normalizeItemTitle,
 } from "@agentweaverlab/shared";
 
 type ItemsResponse = {
@@ -43,7 +43,7 @@ export function AppShell() {
       .then((payload) => {
         if (isMounted) {
           setItems((currentItems) =>
-            mergeItemsPreservingOptimistic(currentItems, payload.items)
+            mergeItemsPreservingOptimistic(currentItems, payload.items),
           );
         }
       })
@@ -66,9 +66,9 @@ export function AppShell() {
     const response = await fetch("/api/items", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     const body = (await response.json()) as CreateResponse;
@@ -95,9 +95,11 @@ export function AppShell() {
     }
 
     startTransition(() => {
-      void createItem({ title: normalizedTitle }).catch((submitError: Error) => {
-        setError(submitError.message);
-      });
+      void createItem({ title: normalizedTitle }).catch(
+        (submitError: Error) => {
+          setError(submitError.message);
+        },
+      );
     });
   }
 
@@ -155,8 +157,66 @@ export function AppShell() {
               <li>`pnpm verify` is the contract.</li>
               <li>`AGENTS.md` is the standing instruction file.</li>
               <li>`verify.yml` is the branch gate.</li>
-              <li>`scripts/codex/setup.sh` is the cloud bootstrap entrypoint.</li>
+              <li>
+                `scripts/codex/setup.sh` is the cloud bootstrap entrypoint.
+              </li>
             </ul>
+          </div>
+
+          <div
+            className="section-card verify-rail"
+            data-testid="verify-rail"
+            aria-label="Verification checklist"
+          >
+            <div className="stack verify-rail-header">
+              <p className="eyebrow verify-rail-eyebrow">Ready for review</p>
+              <h2 className="section-title">
+                Ship the next small change with confidence
+              </h2>
+              <p className="section-copy">
+                A quick visual checklist keeps the main page honest about what a
+                healthy PR still needs before it is ready to merge.
+              </p>
+            </div>
+            <div className="verify-steps" data-testid="verify-steps">
+              <article className="verify-step">
+                <span className="verify-step-badge" aria-hidden="true">
+                  01
+                </span>
+                <div className="stack">
+                  <h3 className="verify-step-title">
+                    Make one focused UI tweak
+                  </h3>
+                  <p className="section-copy">
+                    Keep the diff reversible and obvious to reviewers.
+                  </p>
+                </div>
+              </article>
+              <article className="verify-step">
+                <span className="verify-step-badge" aria-hidden="true">
+                  02
+                </span>
+                <div className="stack">
+                  <h3 className="verify-step-title">Prove it in automation</h3>
+                  <p className="section-copy">
+                    Stable selectors and smoke coverage should confirm the new
+                    UI.
+                  </p>
+                </div>
+              </article>
+              <article className="verify-step">
+                <span className="verify-step-badge" aria-hidden="true">
+                  03
+                </span>
+                <div className="stack">
+                  <h3 className="verify-step-title">Share a visual receipt</h3>
+                  <p className="section-copy">
+                    A screenshot shows the rendered result without asking
+                    reviewers to imagine the finished state.
+                  </p>
+                </div>
+              </article>
+            </div>
           </div>
 
           <div className="section-card stack" id="create-flow">
@@ -194,8 +254,9 @@ export function AppShell() {
           <div className="section-card stack">
             <h2 className="section-title">Current items</h2>
             <p className="section-copy">
-              This starts with in-memory data so the bootstrap stays secret-free.
-              SQLite is a good next step once the workflow itself is proven.
+              This starts with in-memory data so the bootstrap stays
+              secret-free. SQLite is a good next step once the workflow itself
+              is proven.
             </p>
             <ul className="item-list" data-testid="item-list">
               {items.map((item) => (

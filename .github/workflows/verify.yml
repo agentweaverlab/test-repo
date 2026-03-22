@@ -9,7 +9,11 @@ concurrency:
   group: verify-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
   verify:
@@ -41,6 +45,45 @@ jobs:
           PLAYWRIGHT_BASE_URL: "http://127.0.0.1:3000"
         run: pnpm verify
 
+      - name: Capture PR homepage screenshot
+        if: github.event_name == 'pull_request'
+        env:
+          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:3000"
+        run: |
+          mkdir -p artifacts
+          pnpm -C apps/web start -H 127.0.0.1 -p 3000 > artifacts/homepage-server.log 2>&1 &
+          server_pid=$!
+
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+          }
+
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 60); do
+            if curl -fsS "$PLAYWRIGHT_BASE_URL" >/dev/null; then
+              break
+            fi
+
+            sleep 2
+          done
+
+          curl -fsS "$PLAYWRIGHT_BASE_URL" >/dev/null
+          pnpm exec playwright screenshot \
+            --device="Desktop Chrome" \
+            "$PLAYWRIGHT_BASE_URL" \
+            artifacts/homepage-screenshot.png
+
+      - name: Upload PR screenshot artifact
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: homepage-screenshot
+          path: |
+            artifacts/homepage-screenshot.png
+            artifacts/homepage-server.log
+          retention-days: 7
+
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -49,3 +92,93 @@ jobs:
           path: |
             playwright-report
             test-results
+          retention-days: 7
+
+      - name: Comment on same-repo PR with artifact links
+        if: |
+          always() &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          VERIFY_JOB_STATUS: ${{ job.status }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- pr-visual-proof-comment -->';
+            const { owner, repo } = context.repo;
+            const issueNumber = context.issue.number;
+            const runId = Number(process.env.GITHUB_RUN_ID);
+            const runNumber = process.env.GITHUB_RUN_NUMBER;
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${runId}`;
+            const artifactPageUrl = (artifactId) =>
+              `https://github.com/${owner}/${repo}/actions/runs/${runId}/artifacts/${artifactId}`;
+
+            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100,
+            });
+
+            const screenshotArtifact = data.artifacts.find(
+              (artifact) => artifact.name === 'homepage-screenshot' && !artifact.expired,
+            );
+            const reportArtifact = data.artifacts.find(
+              (artifact) => artifact.name === 'playwright-report' && !artifact.expired,
+            );
+
+            const lines = [
+              marker,
+              '## Playwright PR visual proof',
+              `- Verify run: [verify #${runNumber}](${runUrl})`,
+              `- Result: **${process.env.VERIFY_JOB_STATUS}**`,
+            ];
+
+            if (screenshotArtifact) {
+              lines.push(
+                `- Homepage screenshot artifact: [${screenshotArtifact.name}](${artifactPageUrl(screenshotArtifact.id)})`,
+              );
+            } else {
+              lines.push('- Homepage screenshot artifact: not available for this run.');
+            }
+
+            if (reportArtifact) {
+              lines.push(
+                `- Playwright report artifact: [${reportArtifact.name}](${artifactPageUrl(reportArtifact.id)})`,
+              );
+            } else {
+              lines.push('- Playwright report artifact: not available for this run.');
+            }
+
+            lines.push('', '_This comment is updated automatically after each verify run._');
+
+            const body = lines.join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: issueNumber,
+              per_page: 100,
+            });
+
+            const existingComment = comments.find(
+              (comment) => comment.user?.type === 'Bot' && comment.body?.includes(marker),
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body,
+              });
+              core.info(`Updated PR comment ${existingComment.id}.`);
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              body,
+            });
+            core.info('Created a new PR comment with artifact links.');
