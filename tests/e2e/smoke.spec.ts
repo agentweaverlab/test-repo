@@ -5,9 +5,18 @@ test("home loads and primary cta is visible", async ({ page }) => {
 
   await expect(page.getByTestId("app-shell")).toBeVisible();
   await expect(page.getByTestId("primary-cta")).toBeVisible();
+  await expect(page.getByTestId("verify-rail")).toBeVisible();
+  const verifySteps = page.getByTestId("verify-steps");
+  await expect(
+    verifySteps.getByText("Make one focused UI tweak"),
+  ).toBeVisible();
+  await expect(verifySteps.getByText("Prove it in automation")).toBeVisible();
+  await expect(verifySteps.getByText("Share a visual receipt")).toBeVisible();
 });
 
-test("create flow works even if the initial fetch resolves late", async ({ page }) => {
+test("create flow works even if the initial fetch resolves late", async ({
+  page,
+}) => {
   const title = `hello from smoke ${Date.now()}`;
   let handledInitialItemsRequest = false;
 
@@ -25,14 +34,14 @@ test("create flow works even if the initial fetch resolves late", async ({ page 
         items: [
           {
             id: "proof-of-life-item-1",
-            title: "Proof-of-life item"
+            title: "Proof-of-life item",
           },
           {
             id: "codex-ready-verify-flow-2",
-            title: "Codex-ready verify flow"
-          }
-        ]
-      }
+            title: "Codex-ready verify flow",
+          },
+        ],
+      },
     });
   });
 
@@ -43,6 +52,6 @@ test("create flow works even if the initial fetch resolves late", async ({ page 
 
   await expect(page.getByTestId("toast-success")).toContainText("Saved");
   await expect(
-    page.getByTestId("item-list").getByText(title, { exact: true })
+    page.getByTestId("item-list").getByText(title, { exact: true }),
   ).toBeVisible();
 });

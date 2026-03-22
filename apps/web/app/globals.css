@@ -22,11 +22,20 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(255, 214, 170, 0.7), transparent 28%),
-    radial-gradient(circle at right center, rgba(222, 142, 86, 0.24), transparent 24%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 214, 170, 0.7),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at right center,
+      rgba(222, 142, 86, 0.24),
+      transparent 24%
+    ),
     linear-gradient(180deg, #f8f1e6 0%, #efe5d7 100%);
   color: var(--text);
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-family:
+    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
 }
 
 a {
@@ -211,4 +220,59 @@ input {
   .content-grid {
     grid-template-columns: 1.1fr 0.9fr;
   }
+}
+
+.verify-rail {
+  display: grid;
+  gap: 18px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 244, 232, 0.95),
+      rgba(255, 250, 242, 0.98)
+    ),
+    var(--surface-strong);
+}
+
+.verify-rail-header {
+  gap: 8px;
+}
+
+.verify-rail-eyebrow {
+  margin-bottom: 2px;
+}
+
+.verify-steps {
+  display: grid;
+  gap: 12px;
+}
+
+.verify-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid rgba(217, 113, 50, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.verify-step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 14px;
+  background: rgba(217, 113, 50, 0.14);
+  color: var(--accent-deep);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.verify-step-title {
+  margin: 0;
+  font-size: 1rem;
 }
